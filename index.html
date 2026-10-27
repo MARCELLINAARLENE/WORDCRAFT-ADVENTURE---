@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordCraft Adventure: The Lost Words</title>
+    <!-- Tailwind CSS for UI Overlay Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library for 3D Voxel Graphics -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Font Awesome Icons for UI -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Outfit:wght@400;600;800&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Outfit', sans-serif;
+            user-select: none;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+
+        .font-voxel {
+            font-family: 'Fredoka One', cursive, sans-serif;
+            letter-spacing: 0.05em;
+        }
+
+        /* Voxel Styled UI Container */
+        .voxel-panel {
+            background: rgba(15, 23, 42, 0.88);
+            border: 4px solid #38bdf8;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3), inset 0 0 15px rgba(56, 189, 248, 0.15);
+            border-radius: 16px;
+            backdrop-filter: blur(8px);
+        }
+
+        .voxel-panel-gold {
+            background: rgba(30, 27, 75, 0.9);
+            border: 4px solid #f59e0b;
+            box-shadow: 0 0 25px rgba(245, 158, 11, 0.4), inset 0 0 15px rgba(245, 158, 11, 0.2);
+            border-radius: 16px;
+            backdrop-filter: blur(8px);
+        }
+
+        .voxel-btn {
+            background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+            border-bottom: 5px solid #1e40af;
+            border-radius: 12px;
+            transition: all 0.1s ease;
+            text-shadow: 1px 2px 2px rgba(0,0,0,0.5);
+        }
+
+        .voxel-btn.active, .voxel-btn:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+            box-shadow: 0 0 15px rgba(96, 165, 250, 0.6);
+        }
+
+        .voxel-btn-selected {
+            background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%) !important;
+            border-bottom: 5px solid #b45309 !important;
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.8) !important;
+        }
+
+        /* Pulse Animations */
+        @keyframes keyPulse {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.08); opacity: 1; box-shadow: 0 0 12px rgba(56, 189, 248, 0.8); }
+        }
+
+        .animate-key {
+            animation: keyPulse 1.8s infinite ease-in-out;
+        }
+
+        /* Keyboard Key Badge */
+        .key-badge {
+            display: inline-block;
+            background: linear-gradient(180deg, #475569 0%, #1e293b 100%);
+            border: 2px solid #94a3b8;
+            border-bottom: 4px solid #64748b;
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-family: 'Fredoka One', monospace;
+            font-size: 0.85rem;
+            color: #f8fafc;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        }
+
+        /* Floating Notification Card */
+        @keyframes slideDownFade {
+            0% { transform: translateY(-30px) scale(0.9); opacity: 0; }
+            15% { transform: translateY(0) scale(1); opacity: 1; }
+            85% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-20px) scale(0.95); opacity: 0; }
+        }
+
+        .toast-notify {
+            animation: slideDownFade 3.5s forwards ease-in-out;
+        }
+
+        /* Custom Scrollbar for Journal */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #38bdf8;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 overflow-hidden select-none">
+
+    <!-- 3D WebGL Canvas Container -->
+    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+
+    <!-- UI Overlay Layer -->
+    <div id="ui-layer" class="relative z-10 w-full h-screen pointer-events-none flex flex-col justify-between p-4 sm:p-6">
+
+        <!-- HEADER HUD (Visible during gameplay) -->
+        <div id="hud-header" class="hidden w-full flex justify-between items-start pointer-events-auto transition-all duration-300">
+            <!-- Zone Info Panel -->
+            <div class="voxel-panel p-3 px-5 flex items-center space-x-4">
+                <div id="zone-icon-container" class="w-12 h-12 rounded-xl bg-sky-500/20 border-2 border-sky-400 flex items-center justify-center text-sky-300 text-2xl">
+                    <i class="fa-solid fa-tree"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-sky-300 font-bold tracking-wider uppercase">Current Zone</div>
+                    <div id="hud-zone-name" class="text-xl font-voxel text-white">Zone 1: Vocabulary Meadow</div>
+                </div>
+            </div>
+
+            <!-- Stats & Progress -->
+            <div class="flex space-x-3">
+                <div class="voxel-panel p-3 px-4 flex items-center space-x-3">
+                    <i class="fa-solid fa-book-bookmark text-amber-400 text-xl"></i>
+                    <div>
+                        <div class="text-xs text-slate-400 font-semibold">Collected Words</div>
+                        <div id="hud-word-count" class="text-lg font-voxel text-amber-300">0 / 25</div>
+                    </div>
+                </div>
+                <div class="voxel-panel p-3 px-4 flex items-center space-x-3">
+                    <i class="fa-solid fa-star text-yellow-400 text-xl"></i>
+                    <div>
+                        <div class="text-xs text-slate-400 font-semibold">Score Points</div>
+                        <div id="hud-score" class="text-lg font-voxel text-yellow-300">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NOTIFICATION / TOAST CARD (For automatic collision pickups) -->
+        <div id="pickup-toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none min-w-[320px] max-w-md">
+            <div class="voxel-panel-gold p-4 text-center toast-notify">
+                <div class="text-xs text-amber-300 font-bold uppercase tracking-widest mb-1">
+                    <i class="fa-solid fa-sparkles mr-1"></i> Word Collected!
+                </div>
+                <div id="toast-word" class="text-3xl font-voxel text-white mb-1">ENORMOUS</div>
+                <div id="toast-class" class="inline-block px-3 py-0.5 rounded-full bg-amber-500/30 text-amber-200 text-xs font-bold border border-amber-400/50 mb-2">
+                    Adjective
+                </div>
+                <div id="toast-meaning" class="text-sm text-slate-200 font-medium mb-1">Meaning: Very large in size or amount.</div>
+                <div id="toast-example" class="text-xs text-amber-200/90 italic mb-2">"The enormous elephant walked through the village."</div>
+                <div id="toast-malay" class="text-xs text-emerald-300 font-semibold bg-emerald-950/60 py-1 rounded border border-emerald-500/30">
+                    Sangat besar / Luas
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER HUD - CONTROL REMINDER BAR -->
+        <div id="hud-footer" class="hidden w-full flex justify-center items-center pointer-events-none">
+            <div class="voxel-panel py-2 px-6 flex flex-wrap justify-center items-center gap-4 text-xs font-semibold text-slate-300">
+                <span class="flex items-center space-x-1"><span class="key-badge">W A S D</span> <span>Move</span></span>
+                <span class="flex items-center space-x-1"><span class="key-badge">SPACE</span> <span>Jump</span></span>
+                <span class="flex items-center space-x-1"><span class="key-badge">SHIFT</span> <span>Sprint</span></span>
+                <span class="flex items-center space-x-1"><span class="key-badge">E</span> <span class="text-amber-300 font-bold">Word Journal</span></span>
+                <span class="flex items-center space-x-1"><span class="key-badge">B</span> <span>Quick Build</span></span>
+                <span class="flex items-center space-x-1"><span class="key-badge">1-4</span> <span>Answer Quiz</span></span>
+                <span class="flex items-center space-x-1"><span class="key-badge">ESC</span> <span>Pause Menu</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- FULLSCREEN MENU OVERLAYS -->
+
+    <!-- 1. START & FRONT SCREEN OVERLAY -->
+    <div id="screen-title" class="fixed inset-0 z-20 flex flex-col items-center justify-between p-8 bg-slate-950/60 backdrop-blur-sm">
+        <!-- Title Banner -->
+        <div class="text-center mt-6">
+            <div class="inline-block px-4 py-1 rounded-full bg-sky-500/20 border border-sky-400 text-sky-300 font-bold text-sm tracking-widest uppercase mb-3">
+                Year 6 English Educational Adventure
+            </div>
+            <h1 class="text-5xl sm:text-7xl font-voxel text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-sky-300 to-emerald-300 drop-shadow-lg mb-2">
+                WORDCRAFT ADVENTURE
+            </h1>
+            <p class="text-lg sm:text-2xl font-voxel text-slate-200 tracking-wider">
+                THE LOST WORDS
+            </p>
+        </div>
+
+        <!-- Main Menu Navigation Options -->
+        <div class="w-full max-w-md space-y-4 my-auto">
+            <button id="btn-menu-play" class="voxel-btn w-full py-4 text-xl font-voxel text-white flex items-center justify-center space-x-3 voxel-btn-selected">
+                <i class="fa-solid fa-play"></i>
+                <span>START ADVENTURE</span>
+            </button>
+            <button id="btn-menu-howto" class="voxel-btn w-full py-3.5 text-lg font-voxel text-white flex items-center justify-center space-x-3">
+                <i class="fa-solid fa-gamepad"></i>
+                <span>HOW TO PLAY</span>
+            </button>
+            <button id="btn-menu-progress" class="voxel-btn w-full py-3.5 text-lg font-voxel text-white flex items-center justify-center space-x-3">
+                <i class="fa-solid fa-trophy"></i>
+                <span>LEARNING PROGRESS</span>
+            </button>
+        </div>
+
+        <!-- Footer Control Hint -->
+        <div class="voxel-panel py-2 px-6 text-xs text-sky-300 font-semibold flex items-center space-x-3">
+            <span class="key-badge">W / S</span> <span>Select Option</span>
+            <span class="key-badge">ENTER</span> <span>Confirm</span>
+        </div>
+    </div>
+
+    <!-- 2. CHARACTER SELECTION SCREEN OVERLAY -->
+    <div id="screen-char-select" class="hidden fixed inset-0 z-20 flex flex-col items-center justify-between p-6 bg-slate-950/70 backdrop-blur-md">
+        <div class="text-center mt-4">
+            <h2 class="text-3xl sm:text-4xl font-voxel text-amber-300 mb-1">SELECT YOUR EXPLORER</h2>
+            <p class="text-sm text-slate-300">Use <span class="key-badge">A</span> and <span class="key-badge">D</span> to switch character, press <span class="key-badge">ENTER</span> to choose</p>
+        </div>
+
+        <!-- Character Display Card -->
+        <div class="w-full max-w-lg voxel-panel p-6 my-auto text-center relative border-amber-400">
+            <div id="char-badge" class="inline-block px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider mb-2 border border-amber-400/40">
+                Avatar 1 of 4
+            </div>
+            <h3 id="char-name" class="text-3xl font-voxel text-white mb-2">THE ADVENTURER</h3>
+            <p id="char-desc" class="text-sm text-slate-300 mb-4 h-12">Dressed in a green explorer outfit with a brown belt. Energetic, curious, and ready to discover lost vocabulary!</p>
+            
+            <div class="flex justify-center items-center space-x-6 text-xs font-bold text-sky-300 my-2">
+                <div class="bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700">
+                    <i class="fa-solid fa-vest text-emerald-400 mr-2"></i> Green Explorer Gear
+                </div>
+                <div class="bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-700">
+                    <i class="fa-solid fa-compass text-amber-400 mr-2"></i> Speciality: Meadow & Forest
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Buttons Bar -->
+        <div class="flex items-center justify-between w-full max-w-md">
+            <button id="btn-char-prev" class="voxel-btn px-5 py-2.5 text-sm font-voxel text-white">
+                <i class="fa-solid fa-arrow-left mr-2"></i> PREV [A]
+            </button>
+            <button id="btn-char-confirm" class="voxel-btn voxel-btn-selected px-8 py-3 text-lg font-voxel text-white">
+                SELECT [ENTER]
+            </button>
+            <button id="btn-char-next" class="voxel-btn px-5 py-2.5 text-sm font-voxel text-white">
+                NEXT [D] <i class="fa-solid fa-arrow-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. HOW TO PLAY OVERLAY -->
+    <div id="screen-howto" class="hidden fixed inset-0 z-20 flex flex-col items-center justify-center p-6 bg-slate-950/85 backdrop-blur-md">
+        <div class="w-full max-w-2xl voxel-panel p-6 flex flex-col max-h-[90vh]">
+            <h2 class="text-3xl font-voxel text-sky-300 text-center mb-4">HOW TO PLAY & CONTROLS</h2>
+            
+            <div class="overflow-y-auto space-y-4 pr-2 text-sm">
+                <!-- Controls Grid -->
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700">
+                    <h3 class="font-voxel text-amber-300 text-base mb-3"><i class="fa-solid fa-keyboard mr-2"></i>Mandatory Keyboard Controls</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="key-badge">W A S D</span>
+                            <div class="text-xs text-slate-300 font-semibold mt-1">Move Explorer</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="key-badge">SPACE</span>
+                            <div class="text-xs text-slate-300 font-semibold mt-1">Jump Over Obstacles</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="key-badge">SHIFT</span>
+                            <div class="text-xs text-slate-300 font-semibold mt-1">Sprint / Run Faster</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="key-badge">E</span>
+                            <div class="text-xs text-slate-300 font-semibold mt-1">Vocabulary Journal</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="key-badge">1 - 4</span>
+                            <div class="text-xs text-slate-300 font-semibold mt-1">Answer Challenges</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                            <span class="key-badge">ESC</span>
+                            <div class="text-xs text-slate-300 font-semibold mt-1">Pause / Menu Back</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rules & Mechanics -->
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 space-y-2">
+                    <h3 class="font-voxel text-emerald-300 text-base mb-1"><i class="fa-solid fa-bullseye mr-2"></i>Objectives & Mechanics</h3>
+                    <p><i class="fa-solid fa-circle-check text-emerald-400 mr-2"></i><strong>Automatic Pickup:</strong> Simply walk or jump into floating word cubes and crystals to collect them instantly!</p>
+                    <p><i class="fa-solid fa-circle-check text-emerald-400 mr-2"></i><strong>Grammar Gates:</strong> Reach checkpoints at zone borders. Answer the multiple-choice question correctly to unlock the next area.</p>
+                    <p><i class="fa-solid fa-circle-check text-emerald-400 mr-2"></i><strong>5 Learning Zones:</strong> Explore Vocabulary Meadow, Grammar Forest, Tense Desert, Sentence Cave, and Word Kingdom.</p>
+                </div>
+            </div>
+
+            <button id="btn-howto-back" class="voxel-btn voxel-btn-selected mt-6 py-3 w-full font-voxel text-white text-center">
+                BACK TO MENU [ESC]
+            </button>
+        </div>
+    </div>
+
+    <!-- 4. LEARNING PROGRESS OVERLAY -->
+    <div id="screen-progress" class="hidden fixed inset-0 z-20 flex flex-col items-center justify-center p-6 bg-slate-950/85 backdrop-blur-md">
+        <div class="w-full max-w-2xl voxel-panel p-6 flex flex-col max-h-[90vh]">
+            <h2 class="text-3xl font-voxel text-amber-300 text-center mb-4">YOUR LEARNING PROGRESS</h2>
+            
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 text-center">
+                    <div id="prog-words" class="text-2xl font-voxel text-sky-300">0 / 25</div>
+                    <div class="text-xs text-slate-400 font-semibold">Words Collected</div>
+                </div>
+                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 text-center">
+                    <div id="prog-challenges" class="text-2xl font-voxel text-emerald-300">0 / 5</div>
+                    <div class="text-xs text-slate-400 font-semibold">Gates Solved</div>
+                </div>
+                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 text-center">
+                    <div id="prog-zones" class="text-2xl font-voxel text-amber-300">1 / 5</div>
+                    <div class="text-xs text-slate-400 font-semibold">Zones Unlocked</div>
+                </div>
+                <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700 text-center">
+                    <div id="prog-trophy" class="text-2xl font-voxel text-purple-300">Locked</div>
+                    <div class="text-xs text-slate-400 font-semibold">Golden Trophy</div>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700 mb-4 overflow-y-auto max-h-48">
+                <h3 class="font-voxel text-sky-300 text-sm mb-2">Zone Status Overview</h3>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded border border-slate-700">
+                        <span>Zone 1: Vocabulary Meadow</span>
+                        <span id="zone1-status" class="text-emerald-400 font-bold">UNLOCKED</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded border border-slate-700">
+                        <span>Zone 2: Grammar Forest</span>
+                        <span id="zone2-status" class="text-slate-500 font-bold">LOCKED</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded border border-slate-700">
+                        <span>Zone 3: Tense Desert</span>
+                        <span id="zone3-status" class="text-slate-500 font-bold">LOCKED</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded border border-slate-700">
+                        <span>Zone 4: Sentence Cave</span>
+                        <span id="zone4-status" class="text-slate-500 font-bold">LOCKED</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/60 p-2 rounded border border-slate-700">
+                        <span>Zone 5: Word Kingdom</span>
+                        <span id="zone5-status" class="text-slate-500 font-bold">LOCKED</span>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-progress-back" class="voxel-btn voxel-btn-selected py-3 w-full font-voxel text-white text-center">
+                BACK TO MENU [ESC]
+            </button>
+        </div>
+    </div>
+
+    <!-- 5. VOCABULARY JOURNAL OVERLAY (Triggered by key 'E') -->
+    <div id="screen-journal" class="hidden fixed inset-0 z-30 flex flex-col items-center justify-center p-6 bg-slate-950/85 backdrop-blur-md">
+        <div class="w-full max-w-3xl voxel-panel-gold p-6 flex flex-col h-[85vh]">
+            <!-- Header -->
+            <div class="flex justify-between items-center border-b border-amber-500/30 pb-3 mb-4">
+                <div class="flex items-center space-x-3">
+                    <i class="fa-solid fa-book-open text-amber-400 text-3xl"></i>
+                    <div>
+                        <h2 class="text-2xl font-voxel text-amber-300">EXPLORER'S WORD JOURNAL</h2>
+                        <p class="text-xs text-slate-300">Collected Vocabulary & Word Classes</p>
+                    </div>
+                </div>
+                <div class="key-badge text-xs">Press [E] or [ESC] to close</div>
+            </div>
+
+            <!-- Class Filter Tabs -->
+            <div class="flex flex-wrap gap-2 mb-4">
+                <button class="journal-tab voxel-btn active px-3 py-1.5 text-xs font-voxel text-white" data-class="ALL">ALL WORDS</button>
+                <button class="journal-tab voxel-btn px-3 py-1.5 text-xs font-voxel text-white" data-class="NOUN">NOUNS</button>
+                <button class="journal-tab voxel-btn px-3 py-1.5 text-xs font-voxel text-white" data-class="VERB">VERBS</button>
+                <button class="journal-tab voxel-btn px-3 py-1.5 text-xs font-voxel text-white" data-class="ADJECTIVE">ADJECTIVES</button>
+                <button class="journal-tab voxel-btn px-3 py-1.5 text-xs font-voxel text-white" data-class="ADVERB">ADVERBS</button>
+                <button class="journal-tab voxel-btn px-3 py-1.5 text-xs font-voxel text-white" data-class="PREPOSITION">PREPOSITIONS</button>
+            </div>
+
+            <!-- Words List Container -->
+            <div id="journal-word-list" class="overflow-y-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 pr-2">
+                <!-- Dynamically populated word cards -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. GRAMMAR CHALLENGE MODAL OVERLAY (Triggered at checkpoints) -->
+    <div id="screen-challenge" class="hidden fixed inset-0 z-40 flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
+        <div class="w-full max-w-xl voxel-panel p-6 border-amber-400 flex flex-col">
+            <!-- Header -->
+            <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-shield-halved text-amber-400 text-xl"></i>
+                    <span id="challenge-title" class="font-voxel text-lg text-amber-300">GATEWAY GRAMMAR CHALLENGE</span>
+                </div>
+                <span id="challenge-badge" class="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-xs font-bold border border-sky-400/40">
+                    Subject-Verb Agreement
+                </span>
+            </div>
+
+            <!-- Question Box -->
+            <div id="challenge-question" class="text-base font-semibold text-slate-100 bg-slate-800/80 p-4 rounded-xl border border-slate-700 mb-4">
+                Choose the grammatically correct sentence to unlock the forest gate:
+            </div>
+
+            <!-- 4 Options List -->
+            <div class="space-y-2.5 mb-4">
+                <button class="quiz-option voxel-btn w-full py-3 px-4 text-left font-medium text-sm text-white flex items-center space-x-3" data-option="1">
+                    <span class="key-badge">1</span>
+                    <span id="opt-text-1">She walk to school every morning.</span>
+                </button>
+                <button class="quiz-option voxel-btn w-full py-3 px-4 text-left font-medium text-sm text-white flex items-center space-x-3" data-option="2">
+                    <span class="key-badge">2</span>
+                    <span id="opt-text-2">She walks to school every morning.</span>
+                </button>
+                <button class="quiz-option voxel-btn w-full py-3 px-4 text-left font-medium text-sm text-white flex items-center space-x-3" data-option="3">
+                    <span class="key-badge">3</span>
+                    <span id="opt-text-3">She walking to school every morning.</span>
+                </button>
+                <button class="quiz-option voxel-btn w-full py-3 px-4 text-left font-medium text-sm text-white flex items-center space-x-3" data-option="4">
+                    <span class="key-badge">4</span>
+                    <span id="opt-text-4">She walked to school every morning tomorrow.</span>
+                </button>
+            </div>
+
+            <!-- Feedback / Explanation Panel -->
+            <div id="challenge-feedback" class="hidden p-3 rounded-xl text-xs mb-3 font-semibold">
+                <!-- Dynamically filled feedback -->
+            </div>
+
+            <div class="text-xs text-slate-400 text-center font-semibold">
+                Press key <span class="key-badge">1</span>, <span class="key-badge">2</span>, <span class="key-badge">3</span>, or <span class="key-badge">4</span> to select your answer
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. PAUSE MENU OVERLAY -->
+    <div id="screen-pause" class="hidden fixed inset-0 z-30 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-sm">
+        <div class="w-full max-w-sm voxel-panel p-6 text-center space-y-4">
+            <h2 class="text-3xl font-voxel text-sky-300">GAME PAUSED</h2>
+            <div class="space-y-3">
+                <button id="btn-pause-resume" class="voxel-btn voxel-btn-selected w-full py-3 font-voxel text-white">RESUME ADVENTURE [ESC]</button>
+                <button id="btn-pause-howto" class="voxel-btn w-full py-3 font-voxel text-white">CONTROLS & HELP</button>
+                <button id="btn-pause-restart" class="voxel-btn w-full py-3 font-voxel text-white">RESTART LEVEL [R]</button>
+                <button id="btn-pause-quit" class="voxel-btn w-full py-3 font-voxel text-white">MAIN MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. FINAL VICTORY / SUMMARY OVERLAY -->
+    <div id="screen-victory" class="hidden fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md">
+        <div class="w-full max-w-xl voxel-panel-gold p-6 text-center space-y-4">
+            <div class="w-20 h-20 mx-auto rounded-full bg-amber-500/20 border-4 border-amber-400 flex items-center justify-center text-amber-300 text-4xl mb-2 animate-bounce">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <h2 class="text-4xl font-voxel text-amber-300">VICTORY! GOLDEN TROPHY UNLOCKED!</h2>
+            <p class="text-sm text-slate-200">Congratulations Explorer! You have collected all lost words and mastered English grammar across the 5 learning realms.</p>
+
+            <div class="grid grid-cols-3 gap-3 bg-slate-900/80 p-4 rounded-xl border border-amber-500/30 text-left">
+                <div>
+                    <div class="text-xs text-slate-400 font-bold">Total Words</div>
+                    <div id="vic-words" class="text-xl font-voxel text-amber-300">25 / 25</div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-400 font-bold">Grammar Accuracy</div>
+                    <div id="vic-accuracy" class="text-xl font-voxel text-emerald-300">100%</div>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-400 font-bold">Final Score</div>
+                    <div id="vic-score" class="text-xl font-voxel text-yellow-300">2500</div>
+                </div>
+            </div>
+
+            <button id="btn-vic-restart" class="voxel-btn voxel-btn-selected w-full py-3 font-voxel text-white text-lg">
+                PLAY AGAIN [ENTER]
+            </button>
+        </div>
+    </div>
+
+
+    <!-- JAVASCRIPT GAME ENGINE CODE -->
+    <script>
+        /* ==========================================================================
+           1. GAME DATA STRUCTURES & DATABASES
+           ========================================================================== */
+
+        // Selectable Character Avatars
+        const CHARACTERS = [
+            {
+                id: 'adventurer',
+                name: 'THE ADVENTURER',
+                desc: 'Dressed in a green explorer outfit with tan trousers. Energetic, curious, and fast on his feet!',
+                bodyColor: 0x16a34a, // Emerald green shirt
+                legColor: 0xd97706,  // Tan pants
+                hatColor: 0x15803d,  // Explorer hat
+                accessory: 'Compass'
+            },
+            {
+                id: 'scholar',
+                name: 'THE SCHOLAR',
+                desc: 'Blue outfit with a dark scholar backpack. Wise, methodical, and great at sentence structures.',
+                bodyColor: 0x2563eb, // Royal blue
+                legColor: 0x1e293b,  // Dark slate
+                hatColor: 0x1d4ed8,  // Blue cap
+                accessory: 'Backpack'
+            },
+            {
+                id: 'builder',
+                name: 'THE BUILDER',
+                desc: 'Bright orange vest with a handy tool belt. Loves constructing word structures and bridges.',
+                bodyColor: 0xe11d48, // Vibrant orange/red vest
+                legColor: 0x475569,  // Grey jeans
+                hatColor: 0xf59e0b,  // Yellow hardhat
+                accessory: 'Tool Belt'
+            },
+            {
+                id: 'nature',
+                name: 'NATURE EXPLORER',
+                desc: 'Purple and lavender outfit with leaf-themed accents. Calm, patient, and knowledgeable about nature vocabulary.',
+                bodyColor: 0x9333ea, // Purple
+                legColor: 0x334155,  // Slate
+                hatColor: 0x7e22ce,  // Leaf headband
+                accessory: 'Leaf Emblem'
+            }
+        ];
+
+        // 5 Learning Zones Configuration
+        const ZONES = [
+            {
+                id: 1,
+                name: "Zone 1: Vocabulary Meadow",
+                theme: "meadow",
+                groundColor: 0x4ade80, // Lush green grass
+                pathColor: 0xfde047,   // Dirt/sand pathway
+                fogColor: 0xbae6fd,
+                skyColor: 0x38bdf8,
+                icon: "fa-tree"
+            },
+            {
+                id: 2,
+                name: "Zone 2: Grammar Forest",
+                theme: "forest",
+                groundColor: 0x15803d, // Dark forest grass
+                pathColor: 0x854d0e,   // Forest soil
+                fogColor: 0x86efac,
+                skyColor: 0x0284c7,
+                icon: "fa-leaf"
+            },
+            {
+                id: 3,
+                name: "Zone 3: Tense Desert",
+                theme: "desert",
+                groundColor: 0xfde047, // Warm yellow sand
+                pathColor: 0xd97706,   // Orange sandstone
+                fogColor: 0xfef08a,
+                skyColor: 0xf59e0b,
+                icon: "fa-sun"
+            },
+            {
+                id: 4,
+                name: "Zone 4: Sentence Cave",
+                theme: "cave",
+                groundColor: 0x334155, // Dark slate stone
+                pathColor: 0x64748b,   // Cave pathway
+                fogColor: 0x1e1b4b,
+                skyColor: 0x0f172a,
+                icon: "fa-mountain"
+            },
+            {
+                id: 5,
+                name: "Zone 5: Word Kingdom",
+                theme: "kingdom",
+                groundColor: 0xe2e8f0, // White marble
+                pathColor: 0xf59e0b,   // Gold carpet
+                fogColor: 0xe0e7ff,
+                skyColor: 0x6366f1,
+                icon: "fa-crown"
+            }
+        ];
+
+        // Complete Vocabulary Database (Year 6 CEFR A1-A2)
+        const VOCABULARY_DB = [
+            // Zone 1: Meadow (Everyday Nouns & Verbs)
+            { id: 1, word: "village", class: "NOUN", zone: 1, meaning: "A small town in a countryside area.", example: "My grandfather lives in a peaceful village.", malay: "Kampung", pos: {x: -12, y: 1.2, z: -15} },
+            { id: 2, word: "explore", class: "VERB", zone: 1, meaning: "To travel through a place to learn about it.", example: "We explore the colourful meadow together.", malay: "Meneroka", pos: {x: -4, y: 1.2, z: -25} },
+            { id: 3, word: "peaceful", class: "ADJECTIVE", zone: 1, meaning: "Quiet and calm without any noise or worry.", example: "The morning garden is very peaceful.", malay: "Aman / Tenang", pos: {x: 8, y: 1.2, z: -35} },
+            { id: 4, word: "carefully", class: "ADVERB", zone: 1, meaning: "With great care and attention.", example: "She holds the fragile vase carefully.", malay: "Dengan berhati-hati", pos: {x: -8, y: 1.2, z: -45} },
+            { id: 5, word: "beside", class: "PREPOSITION", zone: 1, meaning: "Next to or at the side of something.", example: "The cat slept beside the fireplace.", malay: "Di sebelah", pos: {x: 5, y: 1.2, z: -55} },
+
+            // Zone 2: Forest (Nature & Actions)
+            { id: 6, word: "creature", class: "NOUN", zone: 2, meaning: "An animal or living being.", example: "A mysterious creature was seen in the woods.", malay: "Makhluk", pos: {x: -10, y: 1.2, z: -75} },
+            { id: 7, word: "discover", class: "VERB", zone: 2, meaning: "To find something for the first time.", example: "The pupils discover a hidden path.", malay: "Menemui", pos: {x: 6, y: 1.2, z: -85} },
+            { id: 8, word: "mysterious", class: "ADJECTIVE", zone: 2, meaning: "Strange, secret, or hard to understand.", example: "They entered a mysterious ancient forest.", malay: "Misteri / Ajaib", pos: {x: -5, y: 1.2, z: -95} },
+            { id: 9, word: "quickly", class: "ADVERB", zone: 1, meaning: "At a fast speed.", example: "The deer ran quickly across the river.", malay: "Dengan pantas", pos: {x: 10, y: 1.2, z: -105} },
+            { id: 10, word: "through", class: "PREPOSITION", zone: 2, meaning: "Moving in one side and out the other side.", example: "We walked through the tall green trees.", malay: "Menerusi / Melalui", pos: {x: -2, y: 1.2, z: -115} },
+
+            // Zone 3: Desert (Tenses & Explorations)
+            { id: 11, word: "journey", class: "NOUN", zone: 3, meaning: "An act of travelling from one place to another.", example: "Their desert journey took three days.", malay: "Perjalanan", pos: {x: -12, y: 1.2, z: -135} },
+            { id: 12, word: "protect", class: "VERB", zone: 3, meaning: "To keep someone or something safe from harm.", example: "The fortress will protect the villagers.", malay: "Melindungi", pos: {x: 8, y: 1.2, z: -145} },
+            { id: 13, word: "ancient", class: "ADJECTIVE", zone: 3, meaning: "Very old, from a long time ago.", example: "They found an ancient sandstone ruin.", malay: "Kuno / Purba", pos: {x: -6, y: 1.2, z: -155} },
+            { id: 14, word: "quietly", class: "ADVERB", zone: 3, meaning: "Making very little or no sound.", example: "The camel walked quietly on the soft sand.", malay: "Dengan senyap", pos: {x: 4, y: 1.2, z: -165} },
+            { id: 15, word: "across", class: "PREPOSITION", zone: 3, meaning: "From one side to the other side.", example: "They flew across the hot desert dunes.", malay: "Merentasi", pos: {x: -3, y: 1.2, z: -175} },
+
+            // Zone 4: Cave (Crystals & Connectors)
+            { id: 16, word: "treasure", class: "NOUN", zone: 4, meaning: "A collection of valuable objects like gold.", example: "The chest contained ancient treasure.", malay: "Harta karun", pos: {x: -8, y: 1.2, z: -195} },
+            { id: 17, word: "gather", class: "VERB", zone: 4, meaning: "To come together or collect things.", example: "Pupils gather word crystals in the cave.", malay: "Mengumpul", pos: {x: 10, y: 1.2, z: -205} },
+            { id: 18, word: "brave", class: "ADJECTIVE", zone: 4, meaning: "Showing no fear when facing danger.", example: "A brave explorer solved the cave riddle.", malay: "Berani", pos: {x: -4, y: 1.2, z: -215} },
+            { id: 19, word: "happily", class: "ADVERB", zone: 4, meaning: "In a happy and joyful manner.", example: "The pupils sang happily after winning.", malay: "Dengan gembira", pos: {x: 6, y: 1.2, z: -225} },
+            { id: 20, word: "beneath", class: "PREPOSITION", zone: 4, meaning: "In or to a lower position than something; under.", example: "Glowing crystals were hidden beneath the rock.", malay: "Di bawah", pos: {x: -1, y: 1.2, z: -235} },
+
+            // Zone 5: Kingdom (Final Golden Letters)
+            { id: 21, word: "kingdom", class: "NOUN", zone: 5, meaning: "A country ruled by a king or queen.", example: "Welcome to the grand Word Kingdom!", malay: "Kerajaan", pos: {x: -8, y: 1.2, z: -255} },
+            { id: 22, word: "celebrate", class: "VERB", zone: 5, meaning: "To mark an occasion with joyful activities.", example: "We celebrate our learning victory today.", malay: "Meraikan", pos: {x: 8, y: 1.2, z: -265} },
+            { id: 23, word: "glorious", class: "ADJECTIVE", zone: 5, meaning: "Having or deserving fame, honour, and beauty.", example: "The Golden Word Trophy shines with glorious light.", malay: "Gemilang", pos: {x: -5, y: 1.2, z: -275} },
+            { id: 24, word: "proudly", class: "ADVERB", zone: 5, meaning: "With a feeling of satisfaction and self-respect.", example: "The pupil proudly held the trophy.", malay: "Dengan bangga", pos: {x: 5, y: 1.2, z: -285} },
+            { id: 25, word: "beyond", class: "PREPOSITION", zone: 5, meaning: "Further away in distance than something.", example: "New adventures await beyond the kingdom gates.", malay: "Di luar / Melampaui", pos: {x: 0, y: 1.2, z: -295} }
+        ];
+
+        // Grammar Checkpoint Challenges Database
+        const CHALLENGES_DB = [
+            {
+                gateZone: 1, // At end of Zone 1 (z = -60)
+                gatePos: { x: 0, z: -62 },
+                title: "GATEWAY 1: SUBJECT-VERB AGREEMENT",
+                category: "Subject-Verb Agreement",
+                question: "Choose the grammatically correct sentence to open the Forest Gate:",
+                options: [
+                    "She walk to school every morning.",
+                    "She walks to school every morning.",
+                    "She walking to school every morning.",
+                    "She walked to school every morning tomorrow."
+                ],
+                correct: 2,
+                explanation: "Correct! Singular subject 'She' requires the singular verb 'walks' in the simple present tense."
+            },
+            {
+                gateZone: 2, // At end of Zone 2 (z = -120)
+                gatePos: { x: 0, z: -122 },
+                title: "GATEWAY 2: SIMPLE PAST TENSE",
+                category: "Verb Tenses",
+                question: "Yesterday, Amir _____ football with his friends in the village.",
+                options: [
+                    "plays",
+                    "playing",
+                    "played",
+                    "will play"
+                ],
+                correct: 3,
+                explanation: "Correct! The word 'Yesterday' indicates a completed past action, so we use the past tense 'played'."
+            },
+            {
+                gateZone: 3, // At end of Zone 3 (z = -180)
+                gatePos: { x: 0, z: -182 },
+                title: "GATEWAY 3: ADJECTIVE IDENTIFICATION",
+                category: "Parts of Speech",
+                question: "Which word best completes the sentence?\n'The _____ explorer discovered the hidden treasure chest.'",
+                options: [
+                    "bravely",
+                    "bravery",
+                    "brave",
+                    "braverly"
+                ],
+                correct: 3,
+                explanation: "Correct! 'Brave' is an adjective that describes the noun 'explorer'."
+            },
+            {
+                gateZone: 4, // At end of Zone 4 (z = -240)
+                gatePos: { x: 0, z: -242 },
+                title: "GATEWAY 4: PREPOSITIONS & CONJUNCTIONS",
+                category: "Connectors",
+                question: "Choose the correct word:\n'We brought an umbrella _____ it was raining heavily.'",
+                options: [
+                    "because",
+                    "although",
+                    "or",
+                    "but"
+                ],
+                correct: 1,
+                explanation: "Correct! 'Because' is a conjunction used to state a cause or reason."
+            },
+            {
+                gateZone: 5, // At end of Zone 5 (z = -300)
+                gatePos: { x: 0, z: -302 },
+                title: "FINAL GATEWAY: GOLDEN WORD TROPHY",
+                category: "Comprehensive English Review",
+                question: "Which sentence uses proper subject-verb agreement, adjective, and past tense?",
+                options: [
+                    "The brave pupil unlocked the golden chest yesterday.",
+                    "The brave pupil unlock the golden chest yesterday.",
+                    "The bravely pupil unlocking the golden chest yesterday.",
+                    "The bravery pupil will unlocked the golden chest yesterday."
+                ],
+                correct: 1,
+                explanation: "Splendid! You have mastered Year 6 English grammar and unlocked the Golden Word Trophy!"
+            }
+        ];
+
+        /* ==========================================================================
+           2. SYNTHESIZED WEB AUDIO ENGINE (Zero External Files)
+           ========================================================================== */
+        class AudioSynth {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+            }
+
+            // Short high-pitched pickup chime
+            playPickup() {
+                this.init();
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime); // C5
+                osc.frequency.exponentialRampToValueAtTime(1046.50, this.ctx.currentTime + 0.15); // C6
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            // Jump sound effect
+            playJump() {
+                this.init();
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(400, this.ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.12);
+            }
+
+            // Correct answer chime (Major triad chord)
+            playCorrect() {
+                this.init();
+                if (!this.ctx) return;
+                const freqs = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                freqs.forEach((f, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = f;
+                    const startTime = this.ctx.currentTime + (idx * 0.06);
+                    gain.gain.setValueAtTime(0.15, startTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(startTime);
+                    osc.stop(startTime + 0.3);
+                });
+            }
+
+            // Incorrect answer buzzer
+            playWrong() {
+                this.init();
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                osc.frequency.setValueAtTime(120, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+
+            // Menu selection click sound
+            playSelect() {
+                this.init();
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.05);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.05);
+            }
+        }
+
+        const soundFx = new AudioSynth();
+
+        /* ==========================================================================
+           3. GAME ENGINE STATE MANAGEMENT
+           ========================================================================== */
+        const state = {
+            mode: 'TITLE', // TITLE, CHAR_SELECT, HOW_TO_PLAY, PROGRESS, PLAYING, JOURNAL, CHALLENGE, PAUSED, VICTORY
+            selectedCharIndex: 0,
+            selectedMenuIndex: 0,
+            score: 0,
+            collectedWords: new Set(),
+            completedGates: new Set(),
+            currentZoneId: 1,
+            activeChallenge: null,
+            journalFilter: 'ALL',
+            keys: {},
+            lastTime: performance.now(),
+            
+            // Player physics state
+            player: {
+                pos: new THREE.Vector3(0, 0, 0),
+                vel: new THREE.Vector3(0, 0, 0),
+                rotation: 0,
+                isGrounded: true,
+                isSprinting: false,
+                mesh: null,
+                leftLeg: null,
+                rightLeg: null,
+                leftArm: null,
+                rightArm: null,
+                animTimer: 0
+            }
+        };
+
+        /* ==========================================================================
+           4. THREE.JS 3D SCENE & PROCEDURAL VOXEL MESH BUILDER
+           ========================================================================== */
+        let scene, camera, renderer;
+        let collectiblesGroup, gatesGroup, environmentGroup, previewScene, previewCamera, previewRenderer;
+        let previewMeshGroup;
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x38bdf8);
+            scene.fog = new THREE.FogExp2(0xbae6fd, 0.012);
+
+            // Camera setup (Third Person Follow)
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 8, 14);
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Lighting Setup
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfff7ed, 0.8);
+            dirLight.position.set(20, 40, 20);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 150;
+            dirLight.shadow.camera.left = -30;
+            dirLight.shadow.camera.right = 30;
+            dirLight.shadow.camera.top = 30;
+            dirLight.shadow.camera.bottom = -30;
+            scene.add(dirLight);
+
+            // Groups
+            collectiblesGroup = new THREE.Group();
+            gatesGroup = new THREE.Group();
+            environmentGroup = new THREE.Group();
+            scene.add(collectiblesGroup);
+            scene.add(gatesGroup);
+            scene.add(environmentGroup);
+
+            // Build Voxel World
+            buildVoxelWorld();
+
+            // Create Player Avatar
+            createPlayerMesh(CHARACTERS[state.selectedCharIndex]);
+
+            // Window Resize Listener
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // Procedural Voxel Character Mesh Builder
+        function buildVoxelCharacter(charConfig) {
+            const group = new THREE.Group();
+
+            // Material palettes
+            const bodyMat = new THREE.MeshLambertMaterial({ color: charConfig.bodyColor });
+            const legMat = new THREE.MeshLambertMaterial({ color: charConfig.legColor });
+            const hatMat = new THREE.MeshLambertMaterial({ color: charConfig.hatColor });
+            const skinMat = new THREE.MeshLambertMaterial({ color: 0xffdbac }); // Skin tone
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+
+            // Head (Voxel Cube)
+            const headGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            const head = new THREE.Mesh(headGeo, skinMat);
+            head.position.y = 1.8;
+            head.castShadow = true;
+            group.add(head);
+
+            // Eyes
+            const eyeGeo = new THREE.BoxGeometry(0.12, 0.12, 0.05);
+            const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeL.position.set(-0.2, 1.85, 0.41);
+            const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeR.position.set(0.2, 1.85, 0.41);
+            group.add(eyeL);
+            group.add(eyeR);
+
+            // Hat / Hair Accent
+            const hatGeo = new THREE.BoxGeometry(0.9, 0.25, 0.9);
+            const hat = new THREE.Mesh(hatGeo, hatMat);
+            hat.position.y = 2.25;
+            hat.castShadow = true;
+            group.add(hat);
+
+            // Torso / Body
+            const torsoGeo = new THREE.BoxGeometry(0.85, 1.0, 0.5);
+            const torso = new THREE.Mesh(torsoGeo, bodyMat);
+            torso.position.y = 0.9;
+            torso.castShadow = true;
+            group.add(torso);
+
+            // Left Leg
+            const legGeo = new THREE.BoxGeometry(0.35, 0.8, 0.4);
+            const leftLeg = new THREE.Mesh(legGeo, legMat);
+            leftLeg.position.set(-0.22, 0.4, 0);
+            leftLeg.castShadow = true;
+            group.add(leftLeg);
+
+            // Right Leg
+            const rightLeg = new THREE.Mesh(legGeo, legMat);
+            rightLeg.position.set(0.22, 0.4, 0);
+            rightLeg.castShadow = true;
+            group.add(rightLeg);
+
+            // Left Arm
+            const armGeo = new THREE.BoxGeometry(0.3, 0.8, 0.3);
+            const leftArm = new THREE.Mesh(armGeo, bodyMat);
+            leftArm.position.set(-0.6, 0.9, 0);
+            leftArm.castShadow = true;
+            group.add(leftArm);
+
+            // Right Arm
+            const rightArm = new THREE.Mesh(armGeo, bodyMat);
+            rightArm.position.set(0.6, 0.9, 0);
+            rightArm.castShadow = true;
+            group.add(rightArm);
+
+            return {
+                mesh: group,
+                leftLeg: leftLeg,
+                rightLeg: rightLeg,
+                leftArm: leftArm,
+                rightArm: rightArm
+            };
+        }
+
+        function createPlayerMesh(charConfig) {
+            if (state.player.mesh) {
+                scene.remove(state.player.mesh);
+            }
+            const charData = buildVoxelCharacter(charConfig);
+            state.player.mesh = charData.mesh;
+            state.player.leftLeg = charData.leftLeg;
+            state.player.rightLeg = charData.rightLeg;
+            state.player.leftArm = charData.leftArm;
+            state.player.rightArm = charData.rightArm;
+
+            state.player.mesh.position.copy(state.player.pos);
+            scene.add(state.player.mesh);
+        }
+
+        // Build 5 Interconnected Learning Zones Terrain
+        function buildVoxelWorld() {
+            // Ground Mesh blocks along z-axis from z = 20 down to z = -320
+            const blockGeo = new THREE.BoxGeometry(2, 2, 2);
+            
+            ZONES.forEach(zone => {
+                const zStart = (zone.id - 1) * -60;
+                const zEnd = zone.id * -60;
+
+                const groundMat = new THREE.MeshStandardMaterial({ color: zone.groundColor, roughness: 0.8 });
+                const pathMat = new THREE.MeshStandardMaterial({ color: zone.pathColor, roughness: 0.9 });
+
+                // Generate terrain slab
+                for (let x = -14; x <= 14; x += 2) {
+                    for (let z = zStart; z > zEnd; z -= 2) {
+                        const isPath = (Math.abs(x) <= 3);
+                        const block = new THREE.Mesh(blockGeo, isPath ? pathMat : groundMat);
+                        block.position.set(x, -1, z);
+                        block.receiveShadow = true;
+                        environmentGroup.add(block);
+
+                        // Add decorative voxel trees/props along borders
+                        if (Math.abs(x) >= 10 && Math.random() < 0.15) {
+                            createVoxelProp(zone.theme, x, 0, z);
+                        }
+                    }
+                }
+
+                // Add Zone Border Arch Gateway
+                createZoneGateway(zone, zEnd);
+            });
+
+            // Populate Collectible Voxel Cubes
+            spawnCollectibles();
+        }
+
+        // Decorative Voxel Trees, Cactus, Crystals
+        function createVoxelProp(theme, x, y, z) {
+            const propGroup = new THREE.Group();
+            
+            if (theme === 'meadow' || theme === 'forest') {
+                // Voxel Oak Tree
+                const trunkGeo = new THREE.BoxGeometry(0.8, 3, 0.8);
+                const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f });
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = 1.5;
+                trunk.castShadow = true;
+                propGroup.add(trunk);
+
+                const leavesGeo = new THREE.BoxGeometry(2.4, 2.4, 2.4);
+                const leavesMat = new THREE.MeshStandardMaterial({ color: theme === 'forest' ? 0x065f46 : 0x15803d });
+                const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+                leaves.position.y = 3.5;
+                leaves.castShadow = true;
+                propGroup.add(leaves);
+            } else if (theme === 'desert') {
+                // Voxel Cactus
+                const cactusGeo = new THREE.BoxGeometry(0.6, 2.5, 0.6);
+                const cactusMat = new THREE.MeshStandardMaterial({ color: 0x15803d });
+                const cactus = new THREE.Mesh(cactusGeo, cactusMat);
+                cactus.position.y = 1.25;
+                cactus.castShadow = true;
+                propGroup.add(cactus);
+            } else if (theme === 'cave') {
+                // Glowing Crystal Spire
+                const crystalGeo = new THREE.OctahedronGeometry(0.8);
+                const crystalMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.5 });
+                const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+                crystal.position.y = 1.2;
+                propGroup.add(crystal);
+            } else {
+                // Kingdom Pillar
+                const pillarGeo = new THREE.BoxGeometry(1, 4, 1);
+                const pillarMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9 });
+                const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+                pillar.position.y = 2;
+                propGroup.add(pillar);
+            }
+
+            propGroup.position.set(x, y, z);
+            environmentGroup.add(propGroup);
+        }
+
+        // Gateway Arches between Zones
+        function createZoneGateway(zone, zPos) {
+            const gateGroup = new THREE.Group();
+
+            const archMat = new THREE.MeshStandardMaterial({ color: 0x475569 });
+            const pillarGeo = new THREE.BoxGeometry(1.5, 6, 1.5);
+            
+            const leftPillar = new THREE.Mesh(pillarGeo, archMat);
+            leftPillar.position.set(-5, 3, 0);
+            leftPillar.castShadow = true;
+            gateGroup.add(leftPillar);
+
+            const rightPillar = new THREE.Mesh(pillarGeo, archMat);
+            rightPillar.position.set(5, 3, 0);
+            rightPillar.castShadow = true;
+            gateGroup.add(rightPillar);
+
+            const topArchGeo = new THREE.BoxGeometry(11.5, 1.5, 1.5);
+            const topArch = new THREE.Mesh(topArchGeo, archMat);
+            topArch.position.set(0, 6, 0);
+            topArch.castShadow = true;
+            gateGroup.add(topArch);
+
+            // Glowing Barrier Portal Mesh
+            const barrierGeo = new THREE.PlaneGeometry(8.5, 5);
+            const barrierMat = new THREE.MeshBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.45,
+                side: THREE.DoubleSide
+            });
+            const barrier = new THREE.Mesh(barrierGeo, barrierMat);
+            barrier.position.set(0, 2.5, 0);
+            barrier.name = `barrier_zone_${zone.id}`;
+            gateGroup.add(barrier);
+
+            gateGroup.position.set(0, 0, zPos);
+            gatesGroup.add(gateGroup);
+        }
+
+        // Spawn Floating Collectible Word Cubes
+        function spawnCollectibles() {
+            // Color dictionary for word classes
+            const classColors = {
+                'NOUN': 0x22c55e,        // Emerald Green
+                'VERB': 0xef4444,        // Bright Red
+                'ADJECTIVE': 0xeab308,   // Golden Yellow
+                'ADVERB': 0xa855f7,      // Purple
+                'PREPOSITION': 0x06b6d4  // Cyan
+            };
+
+            VOCABULARY_DB.forEach(item => {
+                const group = new THREE.Group();
+
+                // Rotating Octahedron Crystal / Voxel Cube
+                const geo = new THREE.OctahedronGeometry(0.7);
+                const mat = new THREE.MeshStandardMaterial({
+                    color: classColors[item.class] || 0x38bdf8,
+                    emissive: classColors[item.class] || 0x38bdf8,
+                    emissiveIntensity: 0.3,
+                    roughness: 0.2,
+                    metalness: 0.8
+                });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.castShadow = true;
+                group.add(mesh);
+
+                // Small Outer Orbit Ring
+                const ringGeo = new THREE.TorusGeometry(1.0, 0.05, 8, 24);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = Math.PI / 2;
+                group.add(ring);
+
+                group.position.set(item.pos.x, item.pos.y, item.pos.z);
+                group.userData = { id: item.id, itemData: item, initialY: item.pos.y };
+                collectiblesGroup.add(group);
+            });
+        }
+
+        /* ==========================================================================
+           5. AUTOMATIC COLLISION DETECTION & PICKUP MECHANIC
+           ========================================================================== */
+        function checkCollisions() {
+            if (state.mode !== 'PLAYING') return;
+
+            const playerPos = state.player.pos;
+            const pickupRadius = 1.6; // Physical contact radius threshold
+
+            // 1. Collectible Pickup Detection
+            collectiblesGroup.children.forEach(child => {
+                if (!child.visible) return;
+
+                const dist = playerPos.distanceTo(child.position);
+                if (dist < pickupRadius) {
+                    // AUTOMATIC PICKUP TRIGGERED!
+                    const item = child.userData.itemData;
+                    
+                    // Hide collectible item mesh
+                    child.visible = false;
+                    
+                    // Record in Player Inventory
+                    state.collectedWords.add(item.id);
+                    state.score += 100;
+
+                    // Play pickup audio chime
+                    soundFx.playPickup();
+
+                    // Display Floating Toast Notification
+                    showPickupToast(item);
+
+                    // Update HUD Counter
+                    updateHUD();
+                }
+            });
+
+            // 2. Gateway Checkpoint Collision
+            CHALLENGES_DB.forEach(challenge => {
+                if (state.completedGates.has(challenge.gateZone)) return;
+
+                const gateZ = challenge.gatePos.z;
+                if (Math.abs(playerPos.z - gateZ) < 2.0 && Math.abs(playerPos.x) < 4.0) {
+                    // Player touched locked gate -> Trigger Grammar Challenge Modal!
+                    openChallengeModal(challenge);
+                }
+            });
+        }
+
+        // Show Word Collected Notification Toast Card
+        function showPickupToast(item) {
+            const toast = document.getElementById('pickup-toast');
+            document.getElementById('toast-word').innerText = item.word.toUpperCase();
+            document.getElementById('toast-class').innerText = item.class;
+            document.getElementById('toast-meaning').innerText = `Meaning: ${item.meaning}`;
+            document.getElementById('toast-example').innerText = `"${item.example}"`;
+            document.getElementById('toast-malay').innerText = `Malay: ${item.malay}`;
+
+            toast.classList.remove('hidden');
+
+            // Automatically hide after 3.5 seconds
+            clearTimeout(window.toastTimer);
+            window.toastTimer = setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3500);
+        }
+
+        /* ==========================================================================
+           6. KEYBOARD CONTROLLER & MOVEMENT LOGIC
+           ========================================================================== */
+        function handleInput(delta) {
+            if (state.mode !== 'PLAYING') return;
+
+            const moveSpeed = (state.keys['ShiftLeft'] || state.keys['ShiftRight']) ? 12.0 : 7.0;
+            const dir = new THREE.Vector3();
+
+            if (state.keys['KeyW'] || state.keys['ArrowUp']) dir.z -= 1;
+            if (state.keys['KeyS'] || state.keys['ArrowDown']) dir.z += 1;
+            if (state.keys['KeyA'] || state.keys['ArrowLeft']) dir.x -= 1;
+            if (state.keys['KeyD'] || state.keys['ArrowRight']) dir.x += 1;
+
+            // Normalize movement vector to prevent diagonal speed boost
+            if (dir.lengthSq() > 0) {
+                dir.normalize();
+                
+                // Rotate character facing direction smooth interpolation
+                const targetAngle = Math.atan2(dir.x, dir.z);
+                state.player.rotation = targetAngle;
+                state.player.mesh.rotation.y = targetAngle;
+
+                // Move Position
+                state.player.pos.x += dir.x * moveSpeed * delta;
+                state.player.pos.z += dir.z * moveSpeed * delta;
+
+                // Animate character walking gait
+                state.player.animTimer += delta * moveSpeed * 2.0;
+                const swing = Math.sin(state.player.animTimer) * 0.6;
+                state.player.leftLeg.rotation.x = swing;
+                state.player.rightLeg.rotation.x = -swing;
+                state.player.leftArm.rotation.x = -swing;
+                state.player.rightArm.rotation.x = swing;
+            } else {
+                // Reset limb stance when idle
+                state.player.leftLeg.rotation.x = 0;
+                state.player.rightLeg.rotation.x = 0;
+                state.player.leftArm.rotation.x = 0;
+                state.player.rightArm.rotation.x = 0;
+            }
+
+            // Boundaries
+            state.player.pos.x = Math.max(-12, Math.min(12, state.player.pos.x));
+            state.player.pos.z = Math.min(10, Math.max(-310, state.player.pos.z));
+
+            // Jump Physics
+            if ((state.keys['Space']) && state.player.isGrounded) {
+                state.player.vel.y = 9.0;
+                state.player.isGrounded = false;
+                soundFx.playJump();
+            }
+
+            // Gravity
+            if (!state.player.isGrounded) {
+                state.player.pos.y += state.player.vel.y * delta;
+                state.player.vel.y -= 25.0 * delta; // Gravity constant
+
+                if (state.player.pos.y <= 0) {
+                    state.player.pos.y = 0;
+                    state.player.vel.y = 0;
+                    state.player.isGrounded = true;
+                }
+            }
+
+            // Update Mesh position
+            state.player.mesh.position.copy(state.player.pos);
+
+            // Update Third-Person Camera Follow
+            const camOffset = new THREE.Vector3(0, 7, 10);
+            camera.position.x = state.player.pos.x + camOffset.x;
+            camera.position.y = state.player.pos.y + camOffset.y;
+            camera.position.z = state.player.pos.z + camOffset.z;
+            camera.lookAt(state.player.pos.x, state.player.pos.y + 1.2, state.player.pos.z);
+
+            // Calculate Current Zone
+            const newZoneId = Math.min(5, Math.max(1, Math.floor(-state.player.pos.z / 60) + 1));
+            if (newZoneId !== state.currentZoneId) {
+                state.currentZoneId = newZoneId;
+                updateHUD();
+            }
+        }
+
+        /* ==========================================================================
+           7. UI SCREENS, MODALS & KEYBOARD NAVIGATION
+           ========================================================================== */
+        
+        function setupKeyboardListeners() {
+            window.addEventListener('keydown', (e) => {
+                state.keys[e.code] = true;
+
+                // Prevent browser default scrolling for gameplay keys
+                if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyS', 'KeyA', 'KeyD'].includes(e.code)) {
+                    e.preventDefault();
+                }
+
+                // Global Key Events based on current Game Mode
+                switch (state.mode) {
+                    case 'TITLE':
+                        handleTitleInput(e.code);
+                        break;
+                    case 'CHAR_SELECT':
+                        handleCharSelectInput(e.code);
+                        break;
+                    case 'HOW_TO_PLAY':
+                        if (e.code === 'Escape' || e.code === 'Enter') showScreen('TITLE');
+                        break;
+                    case 'PROGRESS':
+                        if (e.code === 'Escape' || e.code === 'Enter') showScreen('TITLE');
+                        break;
+                    case 'PLAYING':
+                        if (e.code === 'KeyE') openJournal();
+                        if (e.code === 'Escape') pauseGame();
+                        if (e.code === 'KeyB') triggerQuickBuild();
+                        break;
+                    case 'JOURNAL':
+                        if (e.code === 'KeyE' || e.code === 'Escape') closeJournal();
+                        break;
+                    case 'CHALLENGE':
+                        handleChallengeInput(e.code);
+                        break;
+                    case 'PAUSED':
+                        if (e.code === 'Escape') resumeGame();
+                        if (e.code === 'KeyR') restartGame();
+                        break;
+                    case 'VICTORY':
+                        if (e.code === 'Enter' || e.code === 'KeyR') restartGame();
+                        break;
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                state.keys[e.code] = false;
+            });
+        }
+
+        // Title Screen Navigation (W/S to toggle, ENTER to confirm)
+        function handleTitleInput(code) {
+            const menuBtns = ['btn-menu-play', 'btn-menu-howto', 'btn-menu-progress'];
+            
+            if (code === 'KeyW' || code === 'ArrowUp') {
+                state.selectedMenuIndex = (state.selectedMenuIndex - 1 + menuBtns.length) % menuBtns.length;
+                soundFx.playSelect();
+            } else if (code === 'KeyS' || code === 'ArrowDown') {
+                state.selectedMenuIndex = (state.selectedMenuIndex + 1) % menuBtns.length;
+                soundFx.playSelect();
+            } else if (code === 'Enter') {
+                soundFx.playSelect();
+                if (state.selectedMenuIndex === 0) showScreen('CHAR_SELECT');
+                else if (state.selectedMenuIndex === 1) showScreen('HOW_TO_PLAY');
+                else if (state.selectedMenuIndex === 2) showScreen('PROGRESS');
+            }
+
+            // Highlight active button
+            menuBtns.forEach((id, idx) => {
+                const btn = document.getElementById(id);
+                if (idx === state.selectedMenuIndex) btn.classList.add('voxel-btn-selected');
+                else btn.classList.remove('voxel-btn-selected');
+            });
+        }
+
+        // Character Select Navigation (A/D or Arrows to swap, ENTER to select)
+        function handleCharSelectInput(code) {
+            if (code === 'KeyA' || code === 'ArrowLeft') {
+                state.selectedCharIndex = (state.selectedCharIndex - 1 + CHARACTERS.length) % CHARACTERS.length;
+                soundFx.playSelect();
+                updateCharSelectCard();
+            } else if (code === 'KeyD' || code === 'ArrowRight') {
+                state.selectedCharIndex = (state.selectedCharIndex + 1) % CHARACTERS.length;
+                soundFx.playSelect();
+                updateCharSelectCard();
+            } else if (code === 'Enter') {
+                soundFx.playSelect();
+                createPlayerMesh(CHARACTERS[state.selectedCharIndex]);
+                startGameplay();
+            } else if (code === 'Escape') {
+                showScreen('TITLE');
+            }
+        }
+
+        function updateCharSelectCard() {
+            const char = CHARACTERS[state.selectedCharIndex];
+            document.getElementById('char-badge').innerText = `Avatar ${state.selectedCharIndex + 1} of 4`;
+            document.getElementById('char-name').innerText = char.name;
+            document.getElementById('char-desc').innerText = char.desc;
+        }
+
+        // Grammar Challenge Modal Input (1, 2, 3, 4 to select)
+        function handleChallengeInput(code) {
+            const numMap = { 'Digit1': 1, 'Digit2': 2, 'Digit3': 3, 'Digit4': 4, 'Numpad1': 1, 'Numpad2': 2, 'Numpad3': 3, 'Numpad4': 4 };
+            if (numMap[code]) {
+                const choice = numMap[code];
+                const challenge = state.activeChallenge;
+                const feedbackBox = document.getElementById('challenge-feedback');
+
+                feedbackBox.classList.remove('hidden');
+
+                if (choice === challenge.correct) {
+                    // Correct Answer!
+                    soundFx.playCorrect();
+                    feedbackBox.className = "p-3 rounded-xl text-xs mb-3 font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-500/50";
+                    feedbackBox.innerText = challenge.explanation;
+
+                    state.completedGates.add(challenge.gateZone);
+                    state.score += 200;
+
+                    // Remove Barrier Plane
+                    const barrier = scene.getObjectByName(`barrier_zone_${challenge.gateZone}`);
+                    if (barrier) barrier.visible = false;
+
+                    setTimeout(() => {
+                        document.getElementById('screen-challenge').classList.add('hidden');
+                        feedbackBox.classList.add('hidden');
+
+                        if (challenge.gateZone === 5) {
+                            // Final Victory!
+                            triggerVictory();
+                        } else {
+                            state.mode = 'PLAYING';
+                        }
+                    }, 2000);
+                } else {
+                    // Wrong Answer
+                    soundFx.playWrong();
+                    feedbackBox.className = "p-3 rounded-xl text-xs mb-3 font-semibold bg-rose-950/80 text-rose-300 border border-rose-500/50";
+                    feedbackBox.innerText = "Incorrect answer. Try again! Read the sentence carefully.";
+                }
+            }
+        }
+
+        function openChallengeModal(challenge) {
+            state.mode = 'CHALLENGE';
+            state.activeChallenge = challenge;
+
+            document.getElementById('challenge-title').innerText = challenge.title;
+            document.getElementById('challenge-badge').innerText = challenge.category;
+            document.getElementById('challenge-question').innerText = challenge.question;
+
+            document.getElementById('opt-text-1').innerText = challenge.options[0];
+            document.getElementById('opt-text-2').innerText = challenge.options[1];
+            document.getElementById('opt-text-3').innerText = challenge.options[2];
+            document.getElementById('opt-text-4').innerText = challenge.options[3];
+
+            document.getElementById('screen-challenge').classList.remove('hidden');
+        }
+
+        // Vocabulary Journal (Key E)
+        function openJournal() {
+            state.mode = 'JOURNAL';
+            document.getElementById('screen-journal').classList.remove('hidden');
+            renderJournalWords();
+        }
+
+        function closeJournal() {
+            state.mode = 'PLAYING';
+            document.getElementById('screen-journal').classList.add('hidden');
+        }
+
+        function renderJournalWords() {
+            const list = document.getElementById('journal-word-list');
+            list.innerHTML = '';
+
+            const collectedList = VOCABULARY_DB.filter(v => state.collectedWords.has(v.id));
+
+            if (collectedList.length === 0) {
+                list.innerHTML = `<div class="col-span-2 text-center text-slate-400 py-12">No words collected yet! Explore the world and walk into floating cubes to collect vocabulary.</div>`;
+                return;
+            }
+
+            collectedList.forEach(v => {
+                if (state.journalFilter !== 'ALL' && v.class !== state.journalFilter) return;
+
+                const card = document.createElement('div');
+                card.className = "bg-slate-900/80 p-3 rounded-xl border border-amber-500/30 text-left";
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="text-lg font-voxel text-amber-300">${v.word.toUpperCase()}</span>
+                        <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 text-[10px] font-bold border border-amber-400/30">${v.class}</span>
+                    </div>
+                    <div class="text-xs text-slate-200 mb-1"><strong>Meaning:</strong> ${v.meaning}</div>
+                    <div class="text-xs text-amber-200/80 italic mb-1">"${v.example}"</div>
+                    <div class="text-xs text-emerald-400 font-semibold">Malay: ${v.malay}</div>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        // Quick Build Decorative Structure (Key B)
+        function triggerQuickBuild() {
+            const pPos = state.player.pos;
+            const blockGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+            const blockMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b });
+            const block = new THREE.Mesh(blockGeo, blockMat);
+            block.position.set(pPos.x + 1.5, pPos.y + 0.75, pPos.z);
+            environmentGroup.add(block);
+
+            soundFx.playSelect();
+        }
+
+        function pauseGame() {
+            state.mode = 'PAUSED';
+            document.getElementById('screen-pause').classList.remove('hidden');
+        }
+
+        function resumeGame() {
+            state.mode = 'PLAYING';
+            document.getElementById('screen-pause').classList.add('hidden');
+        }
+
+        function restartGame() {
+            state.collectedWords.clear();
+            state.completedGates.clear();
+            state.score = 0;
+            state.currentZoneId = 1;
+            state.player.pos.set(0, 0, 0);
+
+            // Re-enable collectibles and gate barriers
+            collectiblesGroup.children.forEach(c => c.visible = true);
+            gatesGroup.children.forEach(g => {
+                const b = g.getObjectByName(`barrier_zone_`);
+                if (b) b.visible = true;
+            });
+
+            document.getElementById('screen-pause').classList.add('hidden');
+            document.getElementById('screen-victory').classList.add('hidden');
+            startGameplay();
+        }
+
+        function triggerVictory() {
+            state.mode = 'VICTORY';
+            soundFx.playCorrect();
+
+            document.getElementById('vic-words').innerText = `${state.collectedWords.size} / ${VOCABULARY_DB.length}`;
+            document.getElementById('vic-accuracy').innerText = "100%";
+            document.getElementById('vic-score').innerText = state.score;
+
+            document.getElementById('screen-victory').classList.remove('hidden');
+        }
+
+        // Screen Visibility Controller
+        function showScreen(screenId) {
+            const screens = ['TITLE', 'CHAR_SELECT', 'HOW_TO_PLAY', 'PROGRESS'];
+            screens.forEach(s => {
+                const el = document.getElementById(`screen-${s.toLowerCase().replace(/_/g, '')}`);
+                if (el) el.classList.add('hidden');
+            });
+
+            if (screenId === 'TITLE') {
+                state.mode = 'TITLE';
+                document.getElementById('screen-title').classList.remove('hidden');
+            } else if (screenId === 'CHAR_SELECT') {
+                state.mode = 'CHAR_SELECT';
+                document.getElementById('screen-char-select').classList.remove('hidden');
+            } else if (screenId === 'HOW_TO_PLAY') {
+                state.mode = 'HOW_TO_PLAY';
+                document.getElementById('screen-howto').classList.remove('hidden');
+            } else if (screenId === 'PROGRESS') {
+                state.mode = 'PROGRESS';
+                updateProgressScreen();
+                document.getElementById('screen-progress').classList.remove('hidden');
+            }
+        }
+
+        function updateProgressScreen() {
+            document.getElementById('prog-words').innerText = `${state.collectedWords.size} / ${VOCABULARY_DB.length}`;
+            document.getElementById('prog-challenges').innerText = `${state.completedGates.size} / 5`;
+            document.getElementById('prog-zones').innerText = `${state.currentZoneId} / 5`;
+        }
+
+        function startGameplay() {
+            showScreen('NONE');
+            document.getElementById('screen-title').classList.add('hidden');
+            document.getElementById('screen-char-select').classList.add('hidden');
+
+            document.getElementById('hud-header').classList.remove('hidden');
+            document.getElementById('hud-footer').classList.remove('hidden');
+
+            state.mode = 'PLAYING';
+            updateHUD();
+        }
+
+        function updateHUD() {
+            const zone = ZONES.find(z => z.id === state.currentZoneId);
+            if (zone) {
+                document.getElementById('hud-zone-name').innerText = zone.name;
+                document.getElementById('zone-icon-container').innerHTML = `<i class="fa-solid ${zone.icon}"></i>`;
+                scene.background.setHex(zone.skyColor);
+                scene.fog.color.setHex(zone.fogColor);
+            }
+
+            document.getElementById('hud-word-count').innerText = `${state.collectedWords.size} / ${VOCABULARY_DB.length}`;
+            document.getElementById('hud-score').innerText = state.score;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /* ==========================================================================
+           8. MAIN GAME LOOP
+           ========================================================================== */
+        function animate(now) {
+            requestAnimationFrame(animate);
+
+            const delta = Math.min((now - state.lastTime) / 1000, 0.1);
+            state.lastTime = now;
+
+            // Rotate and bob collectible word cubes
+            collectiblesGroup.children.forEach(c => {
+                if (c.visible) {
+                    c.rotation.y += 1.5 * delta;
+                    c.position.y = c.userData.initialY + Math.sin(now * 0.003 + c.userData.id) * 0.25;
+                }
+            });
+
+            // Handle player movement and collision
+            handleInput(delta);
+            checkCollisions();
+
+            // Render 3D Scene
+            renderer.render(scene, camera);
+        }
+
+        // Initialize Game Application on Window Load
+        window.onload = function() {
+            init3D();
+            setupKeyboardListeners();
+            requestAnimationFrame(animate);
+        };
+    </script>
+</body>
+</html>
